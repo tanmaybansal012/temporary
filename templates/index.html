@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Logic Simulator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                    </svg>
+                </div>
+                <h1>Digital Logic Simulator</h1>
+            </div>
+            <nav class="nav-tabs">
+                <button class="tab-btn active" data-target="tab-simulate">Simulate</button>
+                <button class="tab-btn" data-target="tab-truth-table">Truth Table</button>
+                <button class="tab-btn" data-target="tab-flipflop">Flip-Flops</button>
+                <button class="tab-btn" data-target="tab-gates">Universal Gates</button>
+            </nav>
+        </header>
+
+        <main class="app-content">
+            <!-- Simulate Tab -->
+            <section id="tab-simulate" class="tab-content active">
+                <div class="panel-layout">
+                    <div class="input-panel glass-panel">
+                        <h2>Circuit Netlist</h2>
+                        <textarea id="sim-netlist" class="code-editor" spellcheck="false"># Full Adder
+INPUT A B CIN
+
+GATE XOR1 XOR A B
+GATE AND1 AND A B
+GATE XOR2 XOR XOR1 CIN
+GATE AND2 AND XOR1 CIN
+GATE COUT OR AND1 AND2
+
+OUTPUT XOR2 COUT</textarea>
+                        
+                        <div class="input-group">
+                            <label for="sim-inputs">Input Values (e.g., A=1, B=0)</label>
+                            <input type="text" id="sim-inputs" value="A=1, B=1, CIN=0">
+                        </div>
+                        
+                        <button id="btn-simulate" class="primary-btn">Simulate Circuit</button>
+                    </div>
+                    
+                    <div class="output-panel glass-panel">
+                        <h2>Simulation Results</h2>
+                        <div id="sim-results" class="results-container empty">
+                            <p class="placeholder-text">Run simulation to see results</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Truth Table Tab -->
+            <section id="tab-truth-table" class="tab-content">
+                <div class="panel-layout">
+                    <div class="input-panel glass-panel">
+                        <h2>Circuit Netlist</h2>
+                        <textarea id="tt-netlist" class="code-editor" spellcheck="false"># Half Adder
+INPUT A B
+
+GATE SUM XOR A B
+GATE COUT AND A B
+
+OUTPUT SUM COUT</textarea>
+                        
+                        <button id="btn-truth-table" class="primary-btn">Generate Truth Table</button>
+                    </div>
+                    
+                    <div class="output-panel glass-panel">
+                        <h2>Truth Table</h2>
+                        <div id="tt-results" class="results-container empty table-scroll">
+                            <p class="placeholder-text">Generate table to see results</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Flip Flop Tab -->
+            <section id="tab-flipflop" class="tab-content">
+                <div class="panel-layout single-col">
+                    <div class="input-panel glass-panel horizontal-controls">
+                        <div class="control-group">
+                            <label for="ff-type">Element Type</label>
+                            <select id="ff-type">
+                                <option value="d">D Flip-Flop</option>
+                                <option value="jk" selected>JK Flip-Flop</option>
+                                <option value="t">T Flip-Flop</option>
+                                <option value="sr">SR Latch</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="ff-cycles">Cycles</label>
+                            <input type="number" id="ff-cycles" value="8" min="2" max="16">
+                        </div>
+                        <button id="btn-flipflop" class="primary-btn">Run Simulation</button>
+                    </div>
+                    
+                    <div class="ff-output-grid">
+                        <div class="glass-panel">
+                            <h2>Timing Diagram</h2>
+                            <div id="ff-waveform" class="results-container empty image-container">
+                                <p class="placeholder-text">Run simulation to see waveform</p>
+                            </div>
+                        </div>
+                        <div class="glass-panel">
+                            <h2>State Transitions</h2>
+                            <div id="ff-table" class="results-container empty table-scroll">
+                                <p class="placeholder-text">Run simulation to see tables</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Universal Gates Tab -->
+            <section id="tab-gates" class="tab-content">
+                <div class="panel-layout">
+                    <div class="input-panel glass-panel">
+                        <h2>Universal Gate Conversion</h2>
+                        <p class="helper-text">Verify that any boolean function can be implemented using only universal gates (NAND/NOR).</p>
+                        
+                        <div class="control-group mt-4">
+                            <label for="ug-gate">Target Gate</label>
+                            <select id="ug-gate">
+                                <option value="and">AND</option>
+                                <option value="or">OR</option>
+                                <option value="not">NOT</option>
+                                <option value="xor" selected>XOR</option>
+                            </select>
+                        </div>
+                        
+                        <div class="control-group mt-4">
+                            <label for="ug-using">Universal Gate</label>
+                            <select id="ug-using">
+                                <option value="nand" selected>NAND</option>
+                                <option value="nor">NOR</option>
+                            </select>
+                        </div>
+                        
+                        <button id="btn-gates" class="primary-btn mt-4">Verify Equivalence</button>
+                    </div>
+                    
+                    <div class="output-panel glass-panel">
+                        <h2>Verification Results</h2>
+                        <div id="ug-results" class="results-container empty">
+                            <p class="placeholder-text">Verify to see equivalence</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
