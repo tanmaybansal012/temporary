@@ -1,0 +1,20 @@
+# Half Adder Netlist
+#
+# A half adder adds two 1-bit inputs (A, B) and produces:
+#   SUM  = A XOR B
+#   COUT = A AND B
+#
+# Truth table:
+#   A  B | SUM  COUT
+#   -----|----------
+#   0  0 |  0    0
+#   0  1 |  1    0
+#   1  0 |  1    0
+#   1  1 |  0    1
+
+INPUT A B
+
+GATE SUM  XOR A B
+GATE COUT AND A B
+
+OUTPUT SUM COUT

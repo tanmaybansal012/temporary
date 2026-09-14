@@ -1,0 +1,9 @@
+# Digital Logic Simulator — Python dependencies
+#
+# Core logic uses only the Python standard library (signal, circuit,
+# sequential, truth_table, gate_conversion, netlist_parser are stdlib-only).
+#
+# These packages are required only for visualization and testing:
+
+matplotlib>=3.7.0   # timing diagram / waveform plotting (waveform.py)
+pytest>=7.4.0       # unit test runner (tests/)

@@ -1,0 +1,35 @@
+# Full Adder Netlist
+#
+# A full adder adds two 1-bit inputs plus a carry-in and produces:
+#   SUM   = A XOR B XOR CIN
+#   COUT  = (A AND B) OR (A AND CIN) OR (B AND CIN)
+#         = (A AND B) OR ((A XOR B) AND CIN)   ← more gate-efficient
+#
+# Implementation using 2-input gates only:
+#   XOR1 = A XOR B          (partial sum)
+#   AND1 = A AND B          (carry from A,B)
+#   XOR2 = XOR1 XOR CIN     (final SUM)
+#   AND2 = XOR1 AND CIN     (carry from partial sum and CIN)
+#   COUT = AND1 OR AND2     (final carry out)
+#
+# Truth table (8 rows):
+#   A  B  CIN | SUM  COUT
+#   ----------|----------
+#   0  0   0  |  0    0
+#   0  0   1  |  1    0
+#   0  1   0  |  1    0
+#   0  1   1  |  0    1
+#   1  0   0  |  1    0
+#   1  0   1  |  0    1
+#   1  1   0  |  0    1
+#   1  1   1  |  1    1
+
+INPUT A B CIN
+
+GATE XOR1 XOR A B
+GATE AND1 AND A B
+GATE XOR2 XOR XOR1 CIN
+GATE AND2 AND XOR1 CIN
+GATE COUT OR AND1 AND2
+
+OUTPUT XOR2 COUT
