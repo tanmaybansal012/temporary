@@ -360,7 +360,7 @@ def cmd_verify_conversion(args: argparse.Namespace) -> None:
         sigs = [Signal.from_int(v) for v in combo]
         native_out = native_fn(*sigs)
         conv_out = conv_fn(*sigs)
-        match = "✓" if native_out == conv_out else "✗ MISMATCH"
+        match = "OK" if native_out == conv_out else "MISMATCH"
         if native_out != conv_out:
             all_match = False
 
@@ -373,9 +373,9 @@ def cmd_verify_conversion(args: argparse.Namespace) -> None:
 
     print(sep)
     if all_match:
-        print(f"\n✓ PASS — {using.upper()}-built {gate_name.upper()} is equivalent to native {gate_name.upper()}.")
+        print(f"\nPASS -- {using.upper()}-built {gate_name.upper()} is equivalent to native {gate_name.upper()}.")
     else:
-        print(f"\n✗ FAIL — Truth tables do not match!")
+        print(f"\nFAIL -- Truth tables do not match!")
     print()
 
 
