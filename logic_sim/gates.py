@@ -22,7 +22,7 @@ UNKNOWN propagation rules implemented here follow the standard three-valued
 """
 
 from __future__ import annotations
-from typing import List
+from typing import List, Union, Tuple
 from logic_sim.signal import Signal
 
 
@@ -40,8 +40,8 @@ class Gate:
         self.name: str = name
         self.inputs: List[Signal] = []
 
-    def evaluate(self) -> Signal:
-        """Compute and return the gate's output Signal."""
+    def evaluate(self) -> Union[Signal, Tuple[Signal, ...]]:
+        """Compute and return the gate's output Signal(s)."""
         raise NotImplementedError("Subclasses must implement evaluate().")
 
     def __repr__(self) -> str:
@@ -206,6 +206,117 @@ class XNORGate(Gate):
 
 
 # ---------------------------------------------------------------------------
+# Advanced Primitives (MUX, DECODER)
+# ---------------------------------------------------------------------------
+
+def _and(*signals: Signal) -> Signal:
+    g = ANDGate()
+    g.inputs = list(signals)
+    return g.evaluate()
+
+def _or(*signals: Signal) -> Signal:
+    g = ORGate()
+    g.inputs = list(signals)
+    return g.evaluate()
+
+def _not(s: Signal) -> Signal:
+    g = NOTGate()
+    g.inputs = [s]
+    return g.evaluate()
+
+
+class MUX2Gate(Gate):
+    """
+    2-to-1 Multiplexer composed from primitives.
+    Inputs: [A, B, SEL]
+    Output: (A AND NOT SEL) OR (B AND SEL)
+    """
+
+    def evaluate(self) -> Signal:
+        if len(self.inputs) != 3:
+            raise ValueError(f"MUX2Gate expects exactly 3 inputs [A, B, SEL], got {len(self.inputs)}.")
+        a, b, sel = self.inputs
+        
+        not_sel = _not(sel)
+        a_and_not_sel = _and(a, not_sel)
+        b_and_sel = _and(b, sel)
+        return _or(a_and_not_sel, b_and_sel)
+
+
+class MUX4Gate(Gate):
+    """
+    4-to-1 Multiplexer composed from primitives.
+    Inputs: [D0, D1, D2, D3, S0, S1]
+    """
+
+    def evaluate(self) -> Signal:
+        if len(self.inputs) != 6:
+            raise ValueError(f"MUX4Gate expects exactly 6 inputs [D0..D3, S0, S1], got {len(self.inputs)}.")
+        d0, d1, d2, d3, s0, s1 = self.inputs
+        
+        not_s0 = _not(s0)
+        not_s1 = _not(s1)
+        
+        y0 = _and(d0, not_s1, not_s0)
+        y1 = _and(d1, not_s1, s0)
+        y2 = _and(d2, s1, not_s0)
+        y3 = _and(d3, s1, s0)
+        
+        return _or(y0, y1, y2, y3)
+
+
+class DEC2X4Gate(Gate):
+    """
+    2-to-4 Decoder composed from primitives.
+    Inputs: [A0, A1, EN]
+    Outputs: Tuple of 4 Signals (Y0, Y1, Y2, Y3)
+    """
+
+    def evaluate(self) -> Tuple[Signal, Signal, Signal, Signal]:
+        if len(self.inputs) != 3:
+            raise ValueError(f"DEC2X4Gate expects exactly 3 inputs [A0, A1, EN], got {len(self.inputs)}.")
+        a0, a1, en = self.inputs
+        
+        not_a0 = _not(a0)
+        not_a1 = _not(a1)
+        
+        y0 = _and(en, not_a1, not_a0)
+        y1 = _and(en, not_a1, a0)
+        y2 = _and(en, a1, not_a0)
+        y3 = _and(en, a1, a0)
+        
+        return (y0, y1, y2, y3)
+
+
+class DEC3X8Gate(Gate):
+    """
+    3-to-8 Decoder composed from primitives.
+    Inputs: [A0, A1, A2, EN]
+    Outputs: Tuple of 8 Signals (Y0..Y7)
+    """
+
+    def evaluate(self) -> Tuple[Signal, Signal, Signal, Signal, Signal, Signal, Signal, Signal]:
+        if len(self.inputs) != 4:
+            raise ValueError(f"DEC3X8Gate expects exactly 4 inputs [A0, A1, A2, EN], got {len(self.inputs)}.")
+        a0, a1, a2, en = self.inputs
+        
+        not_a0 = _not(a0)
+        not_a1 = _not(a1)
+        not_a2 = _not(a2)
+        
+        y0 = _and(en, not_a2, not_a1, not_a0)
+        y1 = _and(en, not_a2, not_a1, a0)
+        y2 = _and(en, not_a2, a1, not_a0)
+        y3 = _and(en, not_a2, a1, a0)
+        y4 = _and(en, a2, not_a1, not_a0)
+        y5 = _and(en, a2, not_a1, a0)
+        y6 = _and(en, a2, a1, not_a0)
+        y7 = _and(en, a2, a1, a0)
+        
+        return (y0, y1, y2, y3, y4, y5, y6, y7)
+
+
+# ---------------------------------------------------------------------------
 # Registry: map type-name strings to gate classes (used by parser + CLI)
 # ---------------------------------------------------------------------------
 
@@ -217,4 +328,8 @@ GATE_REGISTRY: dict[str, type[Gate]] = {
     "NOR":  NORGate,
     "XOR":  XORGate,
     "XNOR": XNORGate,
+    "MUX2": MUX2Gate,
+    "MUX4": MUX4Gate,
+    "DEC2X4": DEC2X4Gate,
+    "DEC3X8": DEC3X8Gate,
 }

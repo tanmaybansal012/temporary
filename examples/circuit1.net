@@ -1,0 +1,12 @@
+INPUT A B C 
+
+GATE NAND1 NAND A B 
+GATE NAND2 NAND A NAND1
+GATE NAND3 NAND B NAND1
+GATE COUT NAND NAND2 NAND3 
+GATE C2 OR C COUT 
+
+OUTPUT COUT C2
+
+
+# python -m logic_sim.cli truth-table --netlist examples/circuit1.net

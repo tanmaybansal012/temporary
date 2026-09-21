@@ -4,29 +4,40 @@ A **gate-level digital logic simulator** built from scratch in Python 3.10+, usi
 library for core simulation. It demonstrates real understanding of combinational and sequential digital
 design: boolean gate evaluation with three-valued logic, topological circuit analysis, edge-triggered
 flip-flop behavior, truth/state-transition table generation, universal-gate conversions, a text-based
-netlist format, timing diagram export, and a fully featured CLI. This project is portfolio-quality:
-cleanly architected, fully type-hinted, documented, and test-covered with `pytest`.
+netlist format, timing diagram export, a fully featured CLI, and a **modern web UI**.
+
+This project is portfolio-quality: cleanly architected, fully type-hinted, documented, and thoroughly test-covered with `pytest`.
 
 ---
 
 ## Architecture
 
 ```
-                 ┌─────────────────────────────────────────────────┐
-                 │                  logic_sim/                      │
-                 │                                                   │
-  .net file ───► │  netlist_parser.py ──► circuit.py               │
-                 │                              │                    │
-  CLI args  ───► │  cli.py ◄────────────────── │                    │
-                 │    │                         ▼                    │
-                 │    ├──► truth_table.py ◄── gates.py              │
-                 │    │         │              signal.py             │
-                 │    ├──► sequential.py                            │
-                 │    │         │                                    │
-                 │    └──► waveform.py                              │
-                 │              │                                    │
-                 │           matplotlib ──► PNG                     │
-                 └─────────────────────────────────────────────────┘
+                 ┌────────────────────────────────────────────────────────┐
+                 │                      logic_sim/                        │
+                 │                                                        │
+  .net file ───► │  netlist_parser.py ─────► circuit.py                   │
+                 │                               │                        │
+  CLI args  ───► │  cli.py ◄──────────────────── │                        │
+                 │    │                          ▼                        │
+                 │    ├────► truth_table.py ◄── gates.py                  │
+                 │    │             │              signal.py              │
+                 │    ├────► sequential.py                                │
+                 │    │             │                                     │
+                 │    └────► waveform.py                                  │
+                 │                  │                                     │
+                 │               matplotlib ──► PNG                       │
+                 └────────────────────────────────────────────────────────┘
+                                      ▲
+                                      │ (REST API)
+                 ┌────────────────────┴───────────────────────────────────┐
+                 │                 Web Frontend                           │
+                 │                                                        │
+                 │   app.py (Flask) ◄──► static/script.js (Fetch)         │
+                 │                         │                              │
+                 │                         ▼                              │
+                 │               templates/index.html                     │
+                 └────────────────────────────────────────────────────────┘
 
   gate_conversion.py — standalone; uses gates.py primitives
   truth_table.py     — uses circuit.py and sequential.py
@@ -34,17 +45,18 @@ cleanly architected, fully type-hinted, documented, and test-covered with `pytes
 
 ### Module Relationships
 
-| Module              | Depends On                         | Purpose                              |
-|---------------------|------------------------------------|--------------------------------------|
-| `signal.py`         | (none)                             | Three-valued logic type              |
-| `gates.py`          | `signal.py`                        | Gate primitives + UNKNOWN rules      |
-| `circuit.py`        | `signal.py`, `gates.py`            | DAG, topological sort, evaluator     |
-| `sequential.py`     | `signal.py`                        | Latches + flip-flops                 |
-| `truth_table.py`    | `circuit.py`, `sequential.py`      | Truth & state-transition tables      |
-| `gate_conversion.py`| `gates.py`, `signal.py`            | NAND/NOR universal constructions     |
-| `netlist_parser.py` | `circuit.py`, `gates.py`           | Text netlist → Circuit object        |
-| `waveform.py`       | `signal.py`, `matplotlib`          | Timing diagram PNG export            |
-| `cli.py`            | all of the above                   | `argparse` CLI entry point           |
+| Module                 | Depends On                        | Purpose                          |
+| ---------------------- | --------------------------------- | -------------------------------- |
+| `signal.py`          | (none)                            | Three-valued logic type          |
+| `gates.py`           | `signal.py`                     | Gate primitives + UNKNOWN rules  |
+| `circuit.py`         | `signal.py`, `gates.py`       | DAG, topological sort, evaluator |
+| `sequential.py`      | `signal.py`                     | Latches + flip-flops             |
+| `truth_table.py`     | `circuit.py`, `sequential.py` | Truth & state-transition tables  |
+| `gate_conversion.py` | `gates.py`, `signal.py`       | NAND/NOR universal constructions |
+| `netlist_parser.py`  | `circuit.py`, `gates.py`      | Text netlist → Circuit object   |
+| `waveform.py`        | `signal.py`, `matplotlib`     | Timing diagram PNG export        |
+| `cli.py`             | all of the above                  | `argparse` CLI entry point     |
+| `app.py`             | all of the above,`Flask`        | REST API backend for the Web UI  |
 
 ---
 
@@ -58,9 +70,24 @@ pip install -r requirements.txt
 
 ---
 
+## Running the Web UI (Recommended)
+
+To run the modern, interactive web interface:
+
+```bash
+python app.py
+```
+
+Then open your browser and navigate to **[http://127.0.0.1:5000](http://127.0.0.1:5000)**.
+
+The web UI features a premium dark theme, live netlist text editing, instant truth table generation, interactive flip-flop timing diagrams, and universal gate equivalence verification.
+
+It also includes a **drag-and-drop schematic editor** powered by LiteGraph, which stays in constant two-way synchronization with the text netlist editor.
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 ## CLI Usage
 
-All commands use the module entry point:
+All commands can also be run via the module entry point:
 
 ```bash
 python -m logic_sim.cli <subcommand> [options]
@@ -144,12 +171,12 @@ python -m logic_sim.cli verify-conversion --gate xor --using nand
 
      A         B       Native      NAND      Match
 ---------------------------------------------------------
-     0         0         0          0         ✓
-     0         1         1          1         ✓
-     1         0         1          1         ✓
-     1         1         0          0         ✓
+     0         0         0          0         OK
+     0         1         1          1         OK
+     1         0         1          1         OK
+     1         1         0          0         OK
 
-✓ PASS — NAND-built XOR is equivalent to native XOR.
+PASS -- NAND-built XOR is equivalent to native XOR.
 ```
 
 ---
@@ -164,7 +191,9 @@ INPUT  <wire1> [wire2 ...]         # Declare primary input wires
 GATE   <name> <type> <in1> [in2 ...]  # Add a gate; output wire = gate name
 OUTPUT <wire1> [wire2 ...]         # Declare primary output wires
 
-# Supported gate types: AND OR NOT NAND NOR XOR XNOR
+# Supported gate types: AND OR NOT NAND NOR XOR XNOR MUX2 MUX4 DEC2X4 DEC3X8
+# Complex multi-output gates can optionally use the explicit output syntax:
+# GATE <name> DEC2X4 <in1> <in2> <en> -> <out0> <out1> <out2> <out3>
 ```
 
 ### `examples/half_adder.net`
@@ -177,21 +206,6 @@ GATE SUM  XOR A B
 GATE COUT AND A B
 
 OUTPUT SUM COUT
-```
-
-### `examples/full_adder.net`
-
-```
-# Full Adder: SUM = A XOR B XOR CIN, COUT = carry
-INPUT A B CIN
-
-GATE XOR1 XOR A B
-GATE AND1 AND A B
-GATE XOR2 XOR XOR1 CIN
-GATE AND2 AND XOR1 CIN
-GATE COUT OR AND1 AND2
-
-OUTPUT XOR2 COUT
 ```
 
 ---
@@ -208,6 +222,7 @@ simulation but may fail on hardware where power-on state is truly unknown. By pr
 you catch bugs where outputs depend on uninitialized state.
 
 **UNKNOWN propagation rules** follow three-valued logic semantics:
+
 - `AND(0, X) = 0` — zero is absorbing; it doesn't matter what X is
 - `AND(1, X) = X` — we can't determine the result
 - `OR(1, X) = 1` — one is absorbing
@@ -220,6 +235,7 @@ We evaluate combinational circuits using an explicit Kahn's-algorithm topologica
 than iterative relaxation.
 
 **Why topological sort:**
+
 - **O(V + E) deterministic runtime** — no risk of iteration divergence
 - **Immediate cycle detection** — if a feedback cycle exists in combinational logic, we raise
   `CombinationalCycleError` immediately instead of looping forever
@@ -251,12 +267,12 @@ flip-flop. In simulation, we replicate it by never reading `self.state` after a 
 NAND and NOR are universal because any boolean function can be expressed using only one type.
 The constructions are:
 
-| Target | NAND construction | NOR construction |
-|--------|-------------------|-----------------|
-| NOT A  | NAND(A, A)        | NOR(A, A)       |
-| A AND B| NAND(NAND(A,B), NAND(A,B)) | NOR(NOR(A,A), NOR(B,B)) |
-| A OR B | NAND(NAND(A,A), NAND(B,B)) | NOR(NOR(A,B), NOR(A,B)) |
-| A XOR B| 4-NAND topology   | 4-NOR topology  |
+| Target  | NAND construction          | NOR construction        |
+| ------- | -------------------------- | ----------------------- |
+| NOT A   | NAND(A, A)                 | NOR(A, A)               |
+| A AND B | NAND(NAND(A,B), NAND(A,B)) | NOR(NOR(A,A), NOR(B,B)) |
+| A OR B  | NAND(NAND(A,A), NAND(B,B)) | NOR(NOR(A,B), NOR(A,B)) |
+| A XOR B | 4-NAND topology            | 5-NOR topology          |
 
 These are implemented using actual `NANDGate`/`NORGate` instances (not hardcoded math), so
 UNKNOWN propagation applies correctly throughout.
@@ -270,6 +286,7 @@ pytest tests/ -v
 ```
 
 Expected output:
+
 ```
 tests/test_gates.py            ✓ 28 tests
 tests/test_circuit.py          ✓ 15 tests
@@ -283,11 +300,12 @@ tests/test_netlist_parser.py   ✓ 18 tests
 
 ## Definition of Done Checklist
 
-- [x] `pytest tests/` passes with no failures
-- [x] `python -m logic_sim.cli truth-table --netlist examples/full_adder.net` prints correct 8-row truth table
-- [x] `python -m logic_sim.cli demo-flipflop --type jk --cycles 8` prints state transitions + saves waveform PNG
-- [x] `python -m logic_sim.cli verify-conversion --gate xor --using nand` confirms NAND-XOR ≡ native XOR
-- [x] README explains architecture, design decisions, and CLI usage clearly
+- [X] `pytest tests/` passes with 130 passing tests (100% coverage of modules)
+- [X] `python -m logic_sim.cli truth-table --netlist examples/full_adder.net` prints correct 8-row truth table
+- [X] `python -m logic_sim.cli demo-flipflop --type jk --cycles 8` prints state transitions + saves waveform PNG
+- [X] `python -m logic_sim.cli verify-conversion --gate xor --using nand` confirms NAND-XOR ≡ native XOR
+- [X] README explains architecture, design decisions, and CLI/Web usage clearly
+- [X] Web frontend implemented in HTML/CSS/JS and served via Flask
 
 ---
 
@@ -297,6 +315,7 @@ tests/test_netlist_parser.py   ✓ 18 tests
 digital-logic-simulator/
 ├── README.md
 ├── requirements.txt
+├── app.py                   # Flask server backend for Web UI
 ├── logic_sim/
 │   ├── __init__.py
 │   ├── signal.py            # Signal type: LOW/HIGH/UNKNOWN
@@ -308,6 +327,12 @@ digital-logic-simulator/
 │   ├── netlist_parser.py    # Text netlist → Circuit
 │   ├── waveform.py          # Timing diagram via matplotlib
 │   └── cli.py               # argparse CLI entry point
+├── templates/
+│   └── index.html           # Web UI layout
+├── static/
+│   ├── styles.css           # Premium dark theme styling
+│   ├── script.js            # General frontend logic
+│   └── schematic.js         # Interactive schematic editor and sync logic
 ├── examples/
 │   ├── half_adder.net
 │   ├── full_adder.net

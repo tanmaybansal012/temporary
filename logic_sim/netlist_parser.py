@@ -86,7 +86,7 @@ def parse_netlist(text: str, source_name: str = "<string>") -> Circuit:
                 declared_inputs.add(wire_name)
 
         elif directive == "GATE":
-            # Syntax: GATE <name> <type> <in1> [in2 ...]
+            # Syntax: GATE <name> <type> <in1> [in2 ...] [-> <out1> ...]
             if len(tokens) < 4:
                 raise ValueError(
                     f"{source_name}:{lineno}: GATE directive requires at least "
@@ -94,7 +94,15 @@ def parse_netlist(text: str, source_name: str = "<string>") -> Circuit:
                 )
             gate_name = tokens[1]
             gate_type = tokens[2].upper()
-            input_wire_names = tokens[3:]
+            
+            # Check for explicit outputs using "->"
+            if "->" in tokens[3:]:
+                arrow_idx = tokens.index("->", 3)
+                input_wire_names = tokens[3:arrow_idx]
+                explicit_output_names = tokens[arrow_idx + 1:]
+            else:
+                input_wire_names = tokens[3:]
+                explicit_output_names = None
 
             # Validate gate type
             if gate_type not in GATE_REGISTRY:
@@ -103,15 +111,34 @@ def parse_netlist(text: str, source_name: str = "<string>") -> Circuit:
                     f"Valid types: {sorted(GATE_REGISTRY.keys())}"
                 )
 
-            # Validate NOT gate arity
+            # Validate gate arity
             if gate_type == "NOT" and len(input_wire_names) != 1:
                 raise ValueError(
                     f"{source_name}:{lineno}: NOT gate takes exactly 1 input, "
                     f"got {len(input_wire_names)}: {input_wire_names}"
                 )
-
-            # Validate minimum 2 inputs for other gate types
-            if gate_type != "NOT" and len(input_wire_names) < 2:
+            elif gate_type == "MUX2" and len(input_wire_names) != 3:
+                raise ValueError(
+                    f"{source_name}:{lineno}: MUX2 gate takes exactly 3 inputs [A, B, SEL], "
+                    f"got {len(input_wire_names)}: {input_wire_names}"
+                )
+            elif gate_type == "MUX4" and len(input_wire_names) != 6:
+                raise ValueError(
+                    f"{source_name}:{lineno}: MUX4 gate takes exactly 6 inputs [D0..D3, S0, S1], "
+                    f"got {len(input_wire_names)}: {input_wire_names}"
+                )
+            elif gate_type == "DEC2X4" and len(input_wire_names) != 3:
+                raise ValueError(
+                    f"{source_name}:{lineno}: DEC2X4 gate takes exactly 3 inputs [A0, A1, EN], "
+                    f"got {len(input_wire_names)}: {input_wire_names}"
+                )
+            elif gate_type == "DEC3X8" and len(input_wire_names) != 4:
+                raise ValueError(
+                    f"{source_name}:{lineno}: DEC3X8 gate takes exactly 4 inputs [A0, A1, A2, EN], "
+                    f"got {len(input_wire_names)}: {input_wire_names}"
+                )
+            # Validate minimum 2 inputs for other gate types (AND, OR, NAND, NOR, XOR, XNOR)
+            elif gate_type not in ("NOT", "MUX2", "MUX4", "DEC2X4", "DEC3X8") and len(input_wire_names) < 2:
                 raise ValueError(
                     f"{source_name}:{lineno}: {gate_type} gate requires at least "
                     f"2 inputs, got {len(input_wire_names)}: {input_wire_names}"
@@ -128,7 +155,7 @@ def parse_netlist(text: str, source_name: str = "<string>") -> Circuit:
             output_wire_name = gate_name
 
             try:
-                circuit.add_gate(gate_name, gate_type, input_wire_names, output_wire_name)
+                circuit.add_gate(gate_name, gate_type, input_wire_names, output_wire_name, explicit_output_names)
             except ValueError as e:
                 raise ValueError(f"{source_name}:{lineno}: {e}") from e
 

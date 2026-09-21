@@ -59,28 +59,34 @@ class GateNode:
         name:       Unique identifier for this gate in the circuit.
         gate:       The underlying Gate instance.
         input_wires:  Ordered list of Wire objects feeding this gate.
-        output_wire:  The Wire driven by this gate's output.
+        output_wires: List of Wire objects driven by this gate's output(s).
     """
 
-    def __init__(self, name: str, gate: Gate, input_wires: List[Wire], output_wire: Wire) -> None:
+    def __init__(self, name: str, gate: Gate, input_wires: List[Wire], output_wires: List[Wire]) -> None:
         self.name: str = name
         self.gate: Gate = gate
         self.input_wires: List[Wire] = input_wires
-        self.output_wire: Wire = output_wire
+        self.output_wires: List[Wire] = output_wires
 
     def evaluate(self) -> None:
         """
         Push current input wire values into the gate, evaluate, and write
-        the result to the output wire.
+        the result to the output wire(s).
         """
         self.gate.inputs = [w.value for w in self.input_wires]
-        self.output_wire.value = self.gate.evaluate()
+        result = self.gate.evaluate()
+        if isinstance(result, tuple):
+            for i, val in enumerate(result):
+                self.output_wires[i].value = val
+        else:
+            self.output_wires[0].value = result
 
     def __repr__(self) -> str:
         ins = [w.name for w in self.input_wires]
+        outs = [w.name for w in self.output_wires]
         return (
             f"GateNode({self.name!r}, type={self.gate.__class__.__name__}, "
-            f"inputs={ins}, output={self.output_wire.name!r})"
+            f"inputs={ins}, outputs={outs})"
         )
 
 
@@ -168,16 +174,19 @@ class Circuit:
         gate_type: str,
         input_names: List[str],
         output_name: str,
+        explicit_output_names: Optional[List[str]] = None,
     ) -> None:
         """
         Add a gate to the circuit.
 
         Args:
             name:         Unique name for this gate node (e.g. "G1", "XOR1").
-            gate_type:    Gate type string, must be a key in GATE_REGISTRY
-                          ("AND", "OR", "NOT", "NAND", "NOR", "XOR", "XNOR").
+            gate_type:    Gate type string, must be a key in GATE_REGISTRY.
             input_names:  Ordered list of wire names feeding this gate.
-            output_name:  Name of the wire this gate drives.
+            output_name:  Base name of the wire this gate drives. For multi-output
+                          gates, this will create wires like `output_name_0`, `output_name_1`
+                          unless explicit_output_names are provided.
+            explicit_output_names: Optional list of explicit wire names for the outputs.
 
         Raises:
             ValueError: If gate_type is unknown, name is duplicate, or output_name
@@ -195,16 +204,39 @@ class Circuit:
         gate_obj = gate_cls(name=name)
 
         input_wires = [self._get_or_create_wire(n) for n in input_names]
-        output_wire = self._get_or_create_wire(output_name)
+        
+        # Determine number of outputs for this gate type
+        if gate_type == "DEC2X4":
+            num_outputs = 4
+        elif gate_type == "DEC3X8":
+            num_outputs = 8
+        else:
+            num_outputs = 1
+            
+        if explicit_output_names is not None:
+            if len(explicit_output_names) != num_outputs:
+                raise ValueError(
+                    f"Gate {gate_type} requires {num_outputs} outputs, but {len(explicit_output_names)} were provided."
+                )
+            out_names_to_use = explicit_output_names
+        else:
+            out_names_to_use = []
+            for i in range(num_outputs):
+                out_names_to_use.append(f"{output_name}_{i}" if num_outputs > 1 else output_name)
+            
+        output_wires = []
+        for w_name in out_names_to_use:
+            wire = self._get_or_create_wire(w_name)
+            if wire.driven_by is not None:
+                raise ValueError(
+                    f"Wire '{w_name}' is already driven by gate "
+                    f"'{wire.driven_by.name}'. Multiple drivers are illegal."
+                )
+            output_wires.append(wire)
 
-        if output_wire.driven_by is not None:
-            raise ValueError(
-                f"Wire '{output_name}' is already driven by gate "
-                f"'{output_wire.driven_by.name}'. Multiple drivers are illegal."
-            )
-
-        node = GateNode(name, gate_obj, input_wires, output_wire)
-        output_wire.driven_by = node
+        node = GateNode(name, gate_obj, input_wires, output_wires)
+        for w in output_wires:
+            w.driven_by = node
         self._gates[name] = node
         self._topo_order = None  # invalidate cache
 
@@ -258,12 +290,12 @@ class Circuit:
             node = self._gates[gname]
             sorted_nodes.append(node)
 
-            # "Resolve" this gate's output wire: decrement in-degree for consumers
-            out_wire = node.output_wire.name
-            for consumer_name in wire_to_consumers.get(out_wire, set()):
-                in_degree[consumer_name] -= 1
-                if in_degree[consumer_name] == 0:
-                    queue.append(consumer_name)
+            # "Resolve" this gate's output wire(s): decrement in-degree for consumers
+            for out_wire in node.output_wires:
+                for consumer_name in wire_to_consumers.get(out_wire.name, set()):
+                    in_degree[consumer_name] -= 1
+                    if in_degree[consumer_name] == 0:
+                        queue.append(consumer_name)
 
         if len(sorted_nodes) != len(self._gates):
             # Some gates were never dequeued — they are part of a cycle

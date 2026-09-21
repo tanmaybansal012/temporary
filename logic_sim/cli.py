@@ -37,6 +37,7 @@ from logic_sim.gate_conversion import (
 )
 from logic_sim.gates import ANDGate, ORGate, NOTGate, XORGate
 from logic_sim.waveform import plot_waveform
+from logic_sim.exporter import export_to_verilog
 
 
 # ---------------------------------------------------------------------------
@@ -380,6 +381,27 @@ def cmd_verify_conversion(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: export-verilog
+# ---------------------------------------------------------------------------
+
+def cmd_export_verilog(args: argparse.Namespace) -> None:
+    """
+    Load a netlist and export it as synthesizable Verilog.
+    """
+    if not os.path.exists(args.netlist):
+        print(f"Error: Netlist file not found: {args.netlist}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        circuit = parse_netlist_file(args.netlist)
+    except ValueError as e:
+        print(f"Parse error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    verilog_code = export_to_verilog(circuit, args.module)
+    print(verilog_code)
+
+# ---------------------------------------------------------------------------
 # Main parser assembly
 # ---------------------------------------------------------------------------
 
@@ -460,6 +482,21 @@ Examples:
         help="Universal gate to use in the construction.",
     )
     p_vc.set_defaults(func=cmd_verify_conversion)
+
+    # export-verilog
+    p_ev = subparsers.add_parser(
+        "export-verilog",
+        help="Export a netlist to synthesizable Verilog code.",
+    )
+    p_ev.add_argument(
+        "--netlist", required=True,
+        help="Path to the .net netlist file.",
+    )
+    p_ev.add_argument(
+        "--module", default="custom_module",
+        help="Name of the Verilog module to generate (default: custom_module).",
+    )
+    p_ev.set_defaults(func=cmd_export_verilog)
 
     return parser
 

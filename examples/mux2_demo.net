@@ -1,0 +1,6 @@
+# MUX2 Demo Circuit
+# Uses the new MUX2 gate
+
+INPUT A B SEL
+GATE Y MUX2 A B SEL
+OUTPUT Y
