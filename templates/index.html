@@ -6,8 +6,6 @@
     <title>Digital Logic Simulator</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/litegraph.js/0.7.12/css/litegraph.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/litegraph.js/0.7.12/litegraph.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -21,8 +19,7 @@
                 <h1>Digital Logic Simulator</h1>
             </div>
             <nav class="nav-tabs">
-                <button class="tab-btn active" data-target="tab-schematic">Schematic</button>
-                <button class="tab-btn" data-target="tab-simulate">Simulate</button>
+                <button class="tab-btn active" data-target="tab-simulate">Simulate</button>
                 <button class="tab-btn" data-target="tab-truth-table">Truth Table</button>
                 <button class="tab-btn" data-target="tab-flipflop">Flip-Flops</button>
                 <button class="tab-btn" data-target="tab-gates">Universal Gates</button>
@@ -30,117 +27,8 @@
         </header>
 
         <main class="app-content">
-            <!-- Schematic Tab -->
-            <section id="tab-schematic" class="tab-content active">
-                <div class="panel-layout triple-col">
-                    <div class="glass-panel" style="padding: 1rem; display: flex; flex-direction: column; gap: 1rem; grid-column: span 3;">
-                        <div class="horizontal-controls" style="align-items: center;">
-                            <h2 style="margin-bottom: 0;">Interactive Schematic & Netlist Editor</h2>
-                            <div id="sync-status" style="margin-left: 1rem; font-size: 0.85rem; color: var(--text-muted);">Synced ✓</div>
-                            <button id="btn-clear-schematic" class="tab-btn" style="border: 1px solid var(--panel-border); margin-left: auto;">Clear All</button>
-                        </div>
-                        <div class="schematic-layout" style="display: grid; grid-template-columns: 200px 1fr 350px; gap: 1rem; height: 600px;">
-                            <div class="schematic-toolbar">
-                                <h3>Components</h3>
-                                <p class="drag-hint">Drag components to canvas</p>
-                                
-                                <div class="tool-item" draggable="true" data-node="INPUT">
-                                    <div class="tool-icon">IN</div>
-                                    <span>Input</span>
-                                </div>
-                                <div class="tool-item" draggable="true" data-node="OUTPUT">
-                                    <div class="tool-icon" style="color: #ff6b35;">OUT</div>
-                                    <span>Output</span>
-                                </div>
-                                <div class="tool-divider"></div>
-                                
-                                <div class="tool-item" draggable="true" data-node="AND">
-                                    <div class="tool-icon">AND</div>
-                                    <span>AND</span>
-                                </div>
-                                <div class="tool-item" draggable="true" data-node="OR">
-                                    <div class="tool-icon">OR</div>
-                                    <span>OR</span>
-                                </div>
-                                <div class="tool-item" draggable="true" data-node="NOT">
-                                    <div class="tool-icon">NOT</div>
-                                    <span>NOT</span>
-                                </div>
-                                <div class="tool-item" draggable="true" data-node="NAND">
-                                    <div class="tool-icon">NAND</div>
-                                    <span>NAND</span>
-                                </div>
-                                <div class="tool-item" draggable="true" data-node="NOR">
-                                    <div class="tool-icon">NOR</div>
-                                    <span>NOR</span>
-                                </div>
-                                <div class="tool-item" draggable="true" data-node="XOR">
-                                    <div class="tool-icon">XOR</div>
-                                    <span>XOR</span>
-                                </div>
-                                <div class="tool-item" draggable="true" data-node="XNOR">
-                                    <div class="tool-icon">XNOR</div>
-                                    <span>XNOR</span>
-                                </div>
-                                <div class="tool-divider"></div>
-                                <div class="tool-item" draggable="true" data-node="MUX2">
-                                    <div class="tool-icon">MUX2</div>
-                                    <span>MUX 2-to-1</span>
-                                </div>
-                                <div class="tool-item" draggable="true" data-node="MUX4">
-                                    <div class="tool-icon">MUX4</div>
-                                    <span>MUX 4-to-1</span>
-                                </div>
-                                <div class="tool-item" draggable="true" data-node="DEC2X4">
-                                    <div class="tool-icon">DEC2</div>
-                                    <span>DEC 2-to-4</span>
-                                </div>
-                                <div class="tool-item" draggable="true" data-node="DEC3X8">
-                                    <div class="tool-icon">DEC3</div>
-                                    <span>DEC 3-to-8</span>
-                                </div>
-                            </div>
-                            
-                            <div class="canvas-container" style="display: flex; flex-direction: column;">
-                                <div style="background: rgba(0,212,170,0.1); color: var(--primary); padding: 0.5rem; text-align: center; font-size: 0.85rem; border-bottom: 1px solid rgba(0,212,170,0.2);">
-                                    💡 <b>How to wire:</b> Click and drag from an output port to an input port. Double-click I/O to rename. Select and press Delete to remove.
-                                </div>
-                                <canvas id="schematic-canvas" tabindex="1" style="flex: 1; width: 100%; height: 100%; display: block;"></canvas>
-                            </div>
-                            
-                            <div class="editor-side" style="display: flex; flex-direction: column; gap: 1rem; overflow-y: auto;">
-                                <div style="flex: 1; display: flex; flex-direction: column;">
-                                    <h3 style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem; letter-spacing: 1px;">Netlist Editor</h3>
-                                    <textarea id="live-netlist" class="code-editor" spellcheck="false" style="flex: 1; min-height: 200px; margin-bottom: 0;"></textarea>
-                                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                                        <button id="btn-copy-netlist" class="tab-btn" style="flex: 1; border: 1px solid var(--panel-border);">Copy</button>
-                                        <button id="btn-dl-netlist" class="tab-btn" style="flex: 1; border: 1px solid var(--panel-border);">Download .net</button>
-                                    </div>
-                                </div>
-                                
-                                <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--panel-border); border-radius: 8px; padding: 1rem;">
-                                    <h3 style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem; letter-spacing: 1px;">Truth Table</h3>
-                                    <div id="live-tt-results" class="results-container empty table-scroll" style="min-height: 120px;">
-                                        <p class="placeholder-text" style="font-size: 0.8rem;">Auto-generates when valid</p>
-                                    </div>
-                                </div>
-                                
-                                <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--panel-border); border-radius: 8px; padding: 1rem;">
-                                    <h3 style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem; letter-spacing: 1px;">Simulate Inputs</h3>
-                                    <div class="input-group" style="margin-bottom: 0.5rem;">
-                                        <input type="text" id="live-sim-inputs" placeholder="A=1, B=0" style="padding: 0.5rem; font-size: 0.85rem;">
-                                    </div>
-                                    <button id="btn-live-sim" class="primary-btn" style="padding: 0.5rem; font-size: 0.85rem;">Run</button>
-                                    <div id="live-sim-results" class="results-container empty" style="min-height: 60px; margin-top: 0.5rem; padding: 0.5rem; font-size: 0.85rem;"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
             <!-- Simulate Tab -->
-            <section id="tab-simulate" class="tab-content">
+            <section id="tab-simulate" class="tab-content active">
                 <div class="panel-layout">
                     <div class="input-panel glass-panel">
                         <h2>Circuit Netlist</h2>
@@ -273,7 +161,6 @@ OUTPUT SUM COUT</textarea>
         </main>
     </div>
 
-    <script src="{{ url_for('static', filename='schematic.js') }}?v=4"></script>
     <script src="{{ url_for('static', filename='script.js') }}?v=4"></script>
 </body>
 </html>
