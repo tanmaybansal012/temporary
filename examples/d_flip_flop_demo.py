@@ -9,6 +9,14 @@ Run:
     python examples/d_flip_flop_demo.py
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to sys.path if running directly
+repo_root = str(Path(__file__).resolve().parent.parent)
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
 from logic_sim.sequential import DFlipFlop
 from logic_sim.signal import Signal
 from logic_sim.waveform import plot_waveform
@@ -39,11 +47,11 @@ def main() -> None:
         # Detect rising edge
         note = ""
         if i > 0 and clk_pattern[i-1] == 0 and clk_val == 1:
-            note = f"← rising edge: Q latches D={d_val}"
+            note = f"<- rising edge: Q latches D={d_val}"
 
         print(f"{i:^6} {str(clk):^5} {str(d):^4} {str(q):^4}  {note}")
 
-    print("\nObserve: Q only changes on rising clock edges (0→1 transitions)")
+    print("\nObserve: Q only changes on rising clock edges (0->1 transitions)")
 
     signals = {"CLK": clk_trace, "D": d_trace, "Q": q_trace}
     path = plot_waveform(signals, title="D Flip-Flop Timing Diagram",

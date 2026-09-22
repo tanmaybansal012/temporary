@@ -23,6 +23,7 @@ from logic_sim.gate_conversion import (
 )
 from logic_sim.gates import ANDGate, ORGate, NOTGate, XORGate
 from logic_sim.waveform import plot_waveform
+from logic_sim.expression import simplify_circuit
 
 app = Flask(__name__)
 
@@ -105,6 +106,23 @@ def api_netlist_validate():
         return jsonify({"ok": False, "error": str(e)})
 
 
+@app.route("/api/simplify", methods=["POST"])
+def api_simplify():
+    """Return minimized SOP boolean expressions for each output."""
+    data = request.json
+    netlist_text = data.get("netlist", "")
+
+    try:
+        circuit = parse_netlist(netlist_text)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    try:
+        expressions = simplify_circuit(circuit)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+    return jsonify({"expressions": expressions})
 
 
 @app.route("/api/demo-flipflop", methods=["POST"])

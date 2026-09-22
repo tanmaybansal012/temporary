@@ -37,6 +37,7 @@ from typing import List
 
 from logic_sim.circuit import Circuit
 from logic_sim.gates import GATE_REGISTRY
+from logic_sim.sequential import SEQUENTIAL_REGISTRY
 
 
 def parse_netlist(text: str, source_name: str = "<string>") -> Circuit:
@@ -105,10 +106,12 @@ def parse_netlist(text: str, source_name: str = "<string>") -> Circuit:
                 explicit_output_names = None
 
             # Validate gate type
-            if gate_type not in GATE_REGISTRY:
+            is_sequential = gate_type in SEQUENTIAL_REGISTRY
+            if not is_sequential and gate_type not in GATE_REGISTRY:
+                valid_types = sorted(list(GATE_REGISTRY.keys()) + list(SEQUENTIAL_REGISTRY.keys()))
                 raise ValueError(
                     f"{source_name}:{lineno}: Unknown gate type '{gate_type}'. "
-                    f"Valid types: {sorted(GATE_REGISTRY.keys())}"
+                    f"Valid types: {valid_types}"
                 )
 
             # Validate gate arity
@@ -137,12 +140,38 @@ def parse_netlist(text: str, source_name: str = "<string>") -> Circuit:
                     f"{source_name}:{lineno}: DEC3X8 gate takes exactly 4 inputs [A0, A1, A2, EN], "
                     f"got {len(input_wire_names)}: {input_wire_names}"
                 )
-            # Validate minimum 2 inputs for other gate types (AND, OR, NAND, NOR, XOR, XNOR)
-            elif gate_type not in ("NOT", "MUX2", "MUX4", "DEC2X4", "DEC3X8") and len(input_wire_names) < 2:
+            elif gate_type == "DFF" and len(input_wire_names) != 2:
+                raise ValueError(
+                    f"{source_name}:{lineno}: DFF requires exactly 2 inputs [D, CLK], "
+                    f"got {len(input_wire_names)}: {input_wire_names}"
+                )
+            elif gate_type == "JKFF" and len(input_wire_names) != 3:
+                raise ValueError(
+                    f"{source_name}:{lineno}: JKFF requires exactly 3 inputs [J, K, CLK], "
+                    f"got {len(input_wire_names)}: {input_wire_names}"
+                )
+            elif gate_type == "TFF" and len(input_wire_names) != 2:
+                raise ValueError(
+                    f"{source_name}:{lineno}: TFF requires exactly 2 inputs [T, CLK], "
+                    f"got {len(input_wire_names)}: {input_wire_names}"
+                )
+            elif gate_type == "SRLATCH" and len(input_wire_names) not in (2, 3):
+                raise ValueError(
+                    f"{source_name}:{lineno}: SRLATCH requires 2 or 3 inputs [S, R, EN?], "
+                    f"got {len(input_wire_names)}: {input_wire_names}"
+                )
+            elif gate_type == "DLATCH" and len(input_wire_names) not in (1, 2):
+                raise ValueError(
+                    f"{source_name}:{lineno}: DLATCH requires 1 or 2 inputs [D, EN?], "
+                    f"got {len(input_wire_names)}: {input_wire_names}"
+                )
+            # Validate minimum 2 inputs for other combinational gate types (AND, OR, NAND, NOR, XOR, XNOR)
+            elif not is_sequential and gate_type not in ("NOT", "MUX2", "MUX4", "DEC2X4", "DEC3X8") and len(input_wire_names) < 2:
                 raise ValueError(
                     f"{source_name}:{lineno}: {gate_type} gate requires at least "
                     f"2 inputs, got {len(input_wire_names)}: {input_wire_names}"
                 )
+
 
             # Check for duplicate gate names
             if gate_name in declared_gates:

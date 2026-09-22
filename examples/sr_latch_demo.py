@@ -5,6 +5,14 @@ Run:
     python examples/sr_latch_demo.py
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to sys.path if running directly
+repo_root = str(Path(__file__).resolve().parent.parent)
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
 from logic_sim.sequential import SRLatch
 from logic_sim.signal import Signal
 from logic_sim.waveform import plot_waveform
@@ -38,7 +46,7 @@ def main() -> None:
         q_trace.append(q)
         print(f"{i:^6} {str(inp['S']):^4} {str(inp['R']):^4} {str(inp['En']):^4} {str(q):^4}")
 
-    print("\nNote: Step 4 (S=R=1) is the forbidden state → Q = X (UNKNOWN)")
+    print("\nNote: Step 4 (S=R=1) is the forbidden state -> Q = X (UNKNOWN)")
 
     # Plot waveform
     signals = {"S": s_trace, "R": r_trace, "En": en_trace, "Q": q_trace}

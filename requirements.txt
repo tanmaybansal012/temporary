@@ -8,3 +8,5 @@
 matplotlib>=3.7.0   # timing diagram / waveform plotting (waveform.py)
 pytest>=7.4.0       # unit test runner (tests/)
 Flask>=3.0.0        # web server backend (app.py)
+sympy>=1.12.0       # boolean expression simplification (expression.py)
+schemdraw>=0.18     # circuit diagram rendering (render.py)

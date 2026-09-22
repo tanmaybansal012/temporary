@@ -1,9 +1,19 @@
+
+
 """
 exporter.py ?" Export internal Circuit DAG to Verilog code.
 """
 
 from __future__ import annotations
 from typing import List
+
+import sys
+from pathlib import Path
+
+# Add project root to sys.path if running directly
+repo_root = str(Path(__file__).resolve().parent.parent)
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
 
 from logic_sim.circuit import Circuit
 
@@ -58,15 +68,15 @@ def export_to_verilog(circuit: Circuit, module_name: str = "custom_module") -> s
         elif gate_type == "XNORGate":
             expr = " ^ ".join(in_names)
             lines.append(f"    assign {out_names[0]} = ~({expr});")
-        elif gate_type == "MUXGate":
+        elif gate_type in ("MUXGate", "MUX2Gate"):
             d0, d1, sel = in_names
             lines.append(f"    assign {out_names[0]} = {sel} ? {d1} : {d0};")
-        elif gate_type == "DEMUXGate":
+        elif gate_type in ("DEMUXGate", "DEMUX2Gate"):
             d, sel = in_names
             y0, y1 = out_names
             lines.append(f"    assign {y0} = {sel} ? 1'b0 : {d};")
             lines.append(f"    assign {y1} = {sel} ? {d} : 1'b0;")
-        elif gate_type == "DECODERGate":
+        elif gate_type in ("DECODERGate", "DEC2X4Gate"):
             a0, a1 = in_names
             y0, y1, y2, y3 = out_names
             lines.append(f"    assign {y0} = (~{a1}) & (~{a0});")
@@ -80,3 +90,16 @@ def export_to_verilog(circuit: Circuit, module_name: str = "custom_module") -> s
     lines.append("endmodule")
     
     return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    from logic_sim.netlist_parser import parse_netlist
+    sample = """
+    INPUT A B
+    GATE SUM XOR A B
+    GATE COUT AND A B
+    OUTPUT SUM COUT
+    """
+    circuit = parse_netlist(sample)
+    print("// Synthesizable Verilog Export Demo (Half Adder):")
+    print(export_to_verilog(circuit, module_name="half_adder"))

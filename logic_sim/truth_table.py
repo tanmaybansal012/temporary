@@ -25,25 +25,12 @@ from logic_sim.signal import Signal
 
 def generate_truth_table(circuit: Circuit) -> List[Dict[str, Any]]:
     """
-    Generate the full truth table for an n-input combinational circuit.
-
-    Enumerates all 2^n binary input combinations using itertools.product,
-    evaluates the circuit for each, and returns the results as a list of
-    row dicts.
-
-    Args:
-        circuit: A fully constructed Circuit with declared inputs and outputs.
-
-    Returns:
-        List of dicts, one per input combination. Each dict has an entry for
-        every input and every output wire, with Signal values.
-
-    Example::
-
-        rows = generate_truth_table(half_adder_circuit)
-        print_truth_table(rows, half_adder_circuit.input_names,
-                          half_adder_circuit.output_names)
+    Generate the full truth table for an n-input combinational circuit,
+    or the state transition table for a sequential circuit.
     """
+    if circuit.has_sequential:
+        return generate_circuit_state_transition_table(circuit)
+
     input_names = circuit.input_names
     output_names = circuit.output_names
     rows: List[Dict[str, Any]] = []
@@ -56,6 +43,81 @@ def generate_truth_table(circuit: Circuit) -> List[Dict[str, Any]]:
         output_values = circuit.evaluate(input_values)
         row = {**input_values, **output_values}
         rows.append(row)
+
+    return rows
+
+def generate_circuit_state_transition_table(circuit: Circuit) -> List[Dict[str, Any]]:
+    """
+    Generate the state transition table for an entire sequential circuit.
+    Enumerates all combinations of (current states) x (primary inputs).
+    """
+    input_names = circuit.input_names
+    seq_nodes = circuit.sequential_nodes
+    rows: List[Dict[str, Any]] = []
+
+    # Sort sequential nodes by name for deterministic order
+    seq_nodes = sorted(seq_nodes, key=lambda n: n.name)
+
+    # We assume edge-triggered elements, so we evaluate the next state 
+    # as it would be after a clock trigger. We do not include CLK in the 
+    # permutations if it's explicitly named, or we just fix it.
+    # Typically, CLK is a primary input. Let's filter it out of the permutations
+    # and fix it to HIGH/triggered for the next_state calculation.
+    data_input_names = [n for n in input_names if n != "CLK"]
+
+    for state_combo in itertools.product([0, 1], repeat=len(seq_nodes)):
+        # Apply current state to sequential node outputs
+        state_dict = {}
+        for node, val in zip(seq_nodes, state_combo):
+            sig = Signal.from_int(val)
+            node.element.state = sig
+            # Set Q output wire
+            if len(node.output_wires) > 0:
+                node.output_wires[0].value = sig
+            # Set Q_bar output wire if present
+            if len(node.output_wires) > 1:
+                node.output_wires[1].value = sig.invert()
+            
+            state_dict[f"{node.name}_state"] = sig
+
+        for inp_combo in itertools.product([0, 1], repeat=len(data_input_names)):
+            input_values = {
+                name: Signal.from_int(val)
+                for name, val in zip(data_input_names, inp_combo)
+            }
+            if "CLK" in input_names:
+                input_values["CLK"] = Signal.HIGH # We'll trigger it below
+
+            # Evaluate combinational logic
+            output_values = circuit.evaluate(input_values)
+
+            # Compute next state for each sequential node
+            next_state_dict = {}
+            for node in seq_nodes:
+                # Build inputs for the element
+                elem_inputs = {}
+                for pin_name, wire in zip(node.input_names_mapped, node.input_wires):
+                    # For CLK, we simulate a rising edge by setting prev_clk=LOW, clk=HIGH
+                    if pin_name == "CLK":
+                        if hasattr(node.element, "_prev_clk"):
+                            node.element._prev_clk = Signal.LOW
+                        elem_inputs["CLK"] = Signal.HIGH
+                    elif pin_name == "En":
+                        elem_inputs["En"] = wire.value
+                    else:
+                        elem_inputs[pin_name] = wire.value
+
+                q_next = node.element.clock_tick(elem_inputs)
+                next_state_dict[f"{node.name}_next"] = q_next
+
+            # Build the row
+            row = {}
+            row.update(state_dict)
+            for name in data_input_names:
+                row[name] = input_values[name]
+            row.update(next_state_dict)
+            row.update(output_values)
+            rows.append(row)
 
     return rows
 

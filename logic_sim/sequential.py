@@ -402,3 +402,12 @@ class TFlipFlop:
 
     def __repr__(self) -> str:
         return f"TFlipFlop(clock_edge={self.clock_edge!r}, Q={self.state})"
+
+
+SEQUENTIAL_REGISTRY = {
+    "DFF": DFlipFlop,
+    "JKFF": JKFlipFlop,
+    "TFF": TFlipFlop,
+    "SRLATCH": SRLatch,
+    "DLATCH": DLatch,
+}

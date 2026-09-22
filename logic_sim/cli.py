@@ -37,7 +37,10 @@ from logic_sim.gate_conversion import (
 )
 from logic_sim.gates import ANDGate, ORGate, NOTGate, XORGate
 from logic_sim.waveform import plot_waveform
+from logic_sim.expression import simplify_circuit
 from logic_sim.exporter import export_to_verilog
+from logic_sim.render import render_circuit
+from logic_sim.universalize import to_universal
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +108,42 @@ def cmd_simulate(args: argparse.Namespace) -> None:
     print("Outputs:")
     for name, val in outputs.items():
         print(f"  {name} = {val}")
+    print()
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: simplify
+# ---------------------------------------------------------------------------
+
+def cmd_simplify(args: argparse.Namespace) -> None:
+    """
+    Load a netlist and print minimized boolean expressions for each output.
+
+    Example:
+        python -m logic_sim.cli simplify --netlist examples/half_adder.net
+    """
+    if not os.path.exists(args.netlist):
+        print(f"Error: Netlist file not found: {args.netlist}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        circuit = parse_netlist_file(args.netlist)
+    except ValueError as e:
+        print(f"Parse error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        expressions = simplify_circuit(circuit)
+    except Exception as e:
+        print(f"Simplification error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"\n=== Simplified Expressions: {args.netlist} ===")
+    print()
+    # Find max output name length for alignment
+    max_name_len = max(len(name) for name in expressions) if expressions else 0
+    for name, expr in expressions.items():
+        print(f"  {name:<{max_name_len}} = {expr}")
     print()
 
 
@@ -401,6 +440,40 @@ def cmd_export_verilog(args: argparse.Namespace) -> None:
     verilog_code = export_to_verilog(circuit, args.module)
     print(verilog_code)
 
+
+# ---------------------------------------------------------------------------
+# Subcommand: render-circuit
+# ---------------------------------------------------------------------------
+
+def cmd_render_circuit(args: argparse.Namespace) -> None:
+    """
+    Load a netlist, optionally convert to universal gates (NAND/NOR), and render schematic diagram.
+
+    Example:
+        python -m logic_sim.cli render-circuit --netlist examples/half_adder.net --gates native --out diagram.png
+    """
+    if not os.path.exists(args.netlist):
+        print(f"Error: Netlist file not found: {args.netlist}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        circuit = parse_netlist_file(args.netlist)
+    except ValueError as e:
+        print(f"Parse error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    gates_mode = args.gates.lower()
+    if gates_mode in ("nand", "nor"):
+        circuit = to_universal(circuit, gates_mode)
+
+    try:
+        out_path = render_circuit(circuit, output_path=args.out)
+        print(f"Circuit schematic saved to: {out_path}")
+    except Exception as e:
+        print(f"Rendering error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 # ---------------------------------------------------------------------------
 # Main parser assembly
 # ---------------------------------------------------------------------------
@@ -483,6 +556,17 @@ Examples:
     )
     p_vc.set_defaults(func=cmd_verify_conversion)
 
+    # simplify
+    p_simp = subparsers.add_parser(
+        "simplify",
+        help="Print minimized boolean expressions for a netlist's outputs.",
+    )
+    p_simp.add_argument(
+        "--netlist", required=True,
+        help="Path to the .net netlist file.",
+    )
+    p_simp.set_defaults(func=cmd_simplify)
+
     # export-verilog
     p_ev = subparsers.add_parser(
         "export-verilog",
@@ -497,6 +581,25 @@ Examples:
         help="Name of the Verilog module to generate (default: custom_module).",
     )
     p_ev.set_defaults(func=cmd_export_verilog)
+
+    # render-circuit
+    p_rc = subparsers.add_parser(
+        "render-circuit",
+        help="Render schematic diagram to image file (PNG/SVG).",
+    )
+    p_rc.add_argument(
+        "--netlist", required=True,
+        help="Path to the .net netlist file.",
+    )
+    p_rc.add_argument(
+        "--gates", default="native", choices=["native", "nand", "nor"],
+        help="Gate conversion mode: native, nand, or nor (default: native).",
+    )
+    p_rc.add_argument(
+        "--out", default="circuit_schematic.png",
+        help="Output image path (default: circuit_schematic.png).",
+    )
+    p_rc.set_defaults(func=cmd_render_circuit)
 
     return parser
 

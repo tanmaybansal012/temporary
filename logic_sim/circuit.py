@@ -21,9 +21,10 @@ Design decision — topological sort vs. iterative settling:
 
 from __future__ import annotations
 from collections import defaultdict, deque
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from logic_sim.gates import Gate, GATE_REGISTRY
+from logic_sim.sequential import SEQUENTIAL_REGISTRY
 from logic_sim.signal import Signal
 
 
@@ -86,6 +87,33 @@ class GateNode:
         outs = [w.name for w in self.output_wires]
         return (
             f"GateNode({self.name!r}, type={self.gate.__class__.__name__}, "
+            f"inputs={ins}, outputs={outs})"
+        )
+
+
+class SequentialNode:
+    """
+    Wraps a sequential element instance (flip-flop/latch) with connectivity.
+    
+    Attributes:
+        name: Unique identifier.
+        element: The underlying sequential instance (e.g. DFlipFlop).
+        input_wires: Ordered list of Wire objects feeding this element.
+        output_wires: List of Wire objects driven by this element (e.g., Q, Q_bar).
+        input_names_mapped: List of pin names corresponding to input_wires (e.g. ['D', 'CLK']).
+    """
+    def __init__(self, name: str, element: Any, input_wires: List[Wire], output_wires: List[Wire], input_names_mapped: List[str]) -> None:
+        self.name: str = name
+        self.element = element
+        self.input_wires: List[Wire] = input_wires
+        self.output_wires: List[Wire] = output_wires
+        self.input_names_mapped: List[str] = input_names_mapped
+
+    def __repr__(self) -> str:
+        ins = [w.name for w in self.input_wires]
+        outs = [w.name for w in self.output_wires]
+        return (
+            f"SequentialNode({self.name!r}, type={self.element.__class__.__name__}, "
             f"inputs={ins}, outputs={outs})"
         )
 
@@ -177,53 +205,77 @@ class Circuit:
         explicit_output_names: Optional[List[str]] = None,
     ) -> None:
         """
-        Add a gate to the circuit.
-
-        Args:
-            name:         Unique name for this gate node (e.g. "G1", "XOR1").
-            gate_type:    Gate type string, must be a key in GATE_REGISTRY.
-            input_names:  Ordered list of wire names feeding this gate.
-            output_name:  Base name of the wire this gate drives. For multi-output
-                          gates, this will create wires like `output_name_0`, `output_name_1`
-                          unless explicit_output_names are provided.
-            explicit_output_names: Optional list of explicit wire names for the outputs.
-
-        Raises:
-            ValueError: If gate_type is unknown, name is duplicate, or output_name
-                        is already driven by another gate.
+        Add a gate or sequential element to the circuit.
         """
-        if gate_type not in GATE_REGISTRY:
+        is_sequential = gate_type in SEQUENTIAL_REGISTRY
+        if not is_sequential and gate_type not in GATE_REGISTRY:
+            valid_types = sorted(list(GATE_REGISTRY.keys()) + list(SEQUENTIAL_REGISTRY.keys()))
             raise ValueError(
-                f"Unknown gate type '{gate_type}'. "
-                f"Valid types: {sorted(GATE_REGISTRY.keys())}"
+                f"Unknown gate/component type '{gate_type}'. "
+                f"Valid types: {valid_types}"
             )
         if name in self._gates:
             raise ValueError(f"Gate with name '{name}' already exists.")
 
-        gate_cls = GATE_REGISTRY[gate_type]
-        gate_obj = gate_cls(name=name)
-
         input_wires = [self._get_or_create_wire(n) for n in input_names]
-        
-        # Determine number of outputs for this gate type
-        if gate_type == "DEC2X4":
-            num_outputs = 4
-        elif gate_type == "DEC3X8":
-            num_outputs = 8
-        else:
+
+        if is_sequential:
+            comp_cls = SEQUENTIAL_REGISTRY[gate_type]
+            comp_obj = comp_cls()
+            
+            # Default output is Q, and we can also have QN (Q_bar)
             num_outputs = 1
+            if explicit_output_names and len(explicit_output_names) == 2:
+                num_outputs = 2
             
-        if explicit_output_names is not None:
-            if len(explicit_output_names) != num_outputs:
-                raise ValueError(
-                    f"Gate {gate_type} requires {num_outputs} outputs, but {len(explicit_output_names)} were provided."
-                )
-            out_names_to_use = explicit_output_names
+            if explicit_output_names is not None:
+                out_names_to_use = explicit_output_names
+            else:
+                out_names_to_use = [output_name]
+
+            # Map inputs for sequential element based on type
+            # For simplicity, we define the expected order of pins
+            input_names_mapped = []
+            if gate_type == "DFF":
+                input_names_mapped = ["D", "CLK"]
+            elif gate_type == "JKFF":
+                input_names_mapped = ["J", "K", "CLK"]
+            elif gate_type == "TFF":
+                input_names_mapped = ["T", "CLK"]
+            elif gate_type == "SRLATCH":
+                input_names_mapped = ["S", "R", "En"]
+            elif gate_type == "DLATCH":
+                input_names_mapped = ["D", "En"]
+
+            if len(input_names) != len(input_names_mapped):
+                # Fallback if optional EN is missing for latches, though parser should enforce
+                input_names_mapped = input_names_mapped[:len(input_names)]
+
         else:
-            out_names_to_use = []
-            for i in range(num_outputs):
-                out_names_to_use.append(f"{output_name}_{i}" if num_outputs > 1 else output_name)
+            comp_cls = GATE_REGISTRY[gate_type]
+            comp_obj = comp_cls(name=name)
             
+            # Determine number of outputs for this gate type
+            if gate_type == "DEC2X4":
+                num_outputs = 4
+            elif gate_type == "DEC3X8":
+                num_outputs = 8
+            else:
+                num_outputs = 1
+                
+            if explicit_output_names is not None:
+                if len(explicit_output_names) != num_outputs:
+                    raise ValueError(
+                        f"Gate {gate_type} requires {num_outputs} outputs, but {len(explicit_output_names)} were provided."
+                    )
+                out_names_to_use = explicit_output_names
+            else:
+                out_names_to_use = []
+                for i in range(num_outputs):
+                    out_names_to_use.append(f"{output_name}_{i}" if num_outputs > 1 else output_name)
+            
+            input_names_mapped = []
+
         output_wires = []
         for w_name in out_names_to_use:
             wire = self._get_or_create_wire(w_name)
@@ -234,7 +286,11 @@ class Circuit:
                 )
             output_wires.append(wire)
 
-        node = GateNode(name, gate_obj, input_wires, output_wires)
+        if is_sequential:
+            node = SequentialNode(name, comp_obj, input_wires, output_wires, input_names_mapped)
+        else:
+            node = GateNode(name, comp_obj, input_wires, output_wires)
+
         for w in output_wires:
             w.driven_by = node
         self._gates[name] = node
@@ -246,40 +302,32 @@ class Circuit:
 
     def topological_sort(self) -> List[GateNode]:
         """
-        Compute a valid gate evaluation order using Kahn's algorithm.
-
-        Kahn's algorithm maintains in-degree counts for each gate and processes
-        gates whose in-degree drops to zero (all inputs resolved). This naturally
-        detects cycles: if we cannot empty the queue while gates remain, a cycle exists.
-
-        Returns:
-            Ordered list of GateNode instances; evaluating in this order guarantees
-            each gate's inputs are ready before it runs.
-
-        Raises:
-            CombinationalCycleError: If any combinational feedback cycle is detected.
+        Compute a valid gate evaluation order for combinational gates.
+        Sequential nodes are ignored, as their outputs act as primary inputs for
+        combinational logic, and their inputs act as primary outputs.
         """
         if self._topo_order is not None:
             return self._topo_order
 
-        # Build a map: wire_name → set of gate names that read from this wire
         wire_to_consumers: Dict[str, Set[str]] = defaultdict(set)
-        for gname, gnode in self._gates.items():
+        combinational_gates = {
+            gname: gnode for gname, gnode in self._gates.items()
+            if isinstance(gnode, GateNode)
+        }
+
+        for gname, gnode in combinational_gates.items():
             for w in gnode.input_wires:
                 wire_to_consumers[w.name].add(gname)
 
-        # in_degree[gate_name] = number of gate-driven input wires not yet resolved
         in_degree: Dict[str, int] = {}
-        for gname, gnode in self._gates.items():
-            count = 0
+        for gname, gnode in combinational_gates.items():
+            drivers: Set[str] = set()
             for w in gnode.input_wires:
-                # A wire contributes to in-degree only if it is driven by a gate
-                # (primary inputs are always "ready")
-                if w.driven_by is not None:
-                    count += 1
-            in_degree[gname] = count
+                # Treat wires driven by SequentialNodes as if they are primary inputs
+                if w.driven_by is not None and isinstance(w.driven_by, GateNode):
+                    drivers.add(w.driven_by.name)
+            in_degree[gname] = len(drivers)
 
-        # Seed the queue with gates whose inputs are all primary inputs
         queue: deque[str] = deque(
             gname for gname, deg in in_degree.items() if deg == 0
         )
@@ -287,23 +335,20 @@ class Circuit:
 
         while queue:
             gname = queue.popleft()
-            node = self._gates[gname]
+            node = combinational_gates[gname]
             sorted_nodes.append(node)
 
-            # "Resolve" this gate's output wire(s): decrement in-degree for consumers
             for out_wire in node.output_wires:
                 for consumer_name in wire_to_consumers.get(out_wire.name, set()):
                     in_degree[consumer_name] -= 1
                     if in_degree[consumer_name] == 0:
                         queue.append(consumer_name)
 
-        if len(sorted_nodes) != len(self._gates):
-            # Some gates were never dequeued — they are part of a cycle
-            remaining = set(self._gates) - {n.name for n in sorted_nodes}
+        if len(sorted_nodes) < len(combinational_gates):
+            unresolved = [g for g, deg in in_degree.items() if deg > 0]
             raise CombinationalCycleError(
-                f"Combinational cycle detected! The following gates form a cycle "
-                f"(or depend on one): {sorted(remaining)}. "
-                f"Add registers to break feedback loops."
+                f"Combinational cycle detected! The following gates are trapped in "
+                f"a feedback loop: {unresolved}"
             )
 
         self._topo_order = sorted_nodes
@@ -339,10 +384,11 @@ class Circuit:
                     f"'{name}' is not a declared primary input of this circuit."
                 )
 
-        # Reset all non-input wires to UNKNOWN for a clean evaluation
+        # Reset all purely combinational non-input wires to UNKNOWN for a clean evaluation
         for wire in self._wires.values():
             if not wire.is_primary_input:
-                wire.value = Signal.UNKNOWN
+                if wire.driven_by is None or not isinstance(wire.driven_by, SequentialNode):
+                    wire.value = Signal.UNKNOWN
 
         # Apply provided input values
         for name, value in input_values.items():
@@ -353,7 +399,7 @@ class Circuit:
             if name not in input_values:
                 self._wires[name].value = Signal.UNKNOWN
 
-        # Evaluate in topological order
+        # Evaluate in topological order (only visits GateNodes)
         for node in self.topological_sort():
             node.evaluate()
 
@@ -366,6 +412,16 @@ class Circuit:
     # ------------------------------------------------------------------
     # Introspection helpers
     # ------------------------------------------------------------------
+
+    @property
+    def sequential_nodes(self) -> List[SequentialNode]:
+        """All sequential nodes in the circuit."""
+        return [node for node in self._gates.values() if isinstance(node, SequentialNode)]
+
+    @property
+    def has_sequential(self) -> bool:
+        """Return True if the circuit contains any sequential elements."""
+        return len(self.sequential_nodes) > 0
 
     @property
     def input_names(self) -> List[str]:
@@ -392,6 +448,12 @@ class Circuit:
         if name not in self._wires:
             raise ValueError(f"No wire named '{name}' in circuit.")
         return self._wires[name].value
+
+    def get_gate(self, name: str) -> GateNode:
+        """Return the GateNode for a given gate name."""
+        if name not in self._gates:
+            raise ValueError(f"No gate named '{name}' in circuit.")
+        return self._gates[name]
 
     def __repr__(self) -> str:
         return (
