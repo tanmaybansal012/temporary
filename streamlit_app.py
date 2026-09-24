@@ -138,7 +138,7 @@ st.markdown("""
 # Secondary navigation aligned right
 nav_col1, nav_col2 = st.columns([1, 1])
 with nav_col2:
-    nav_selection = st.radio("Navigation", ["Simulate", "Truth Table", "Circuit Info"], horizontal=True, label_visibility="collapsed")
+    nav_selection = st.radio("Navigation", ["Simulate", "Truth Table", "Circuit Info", "Documentation"], horizontal=True, label_visibility="collapsed")
 
 # ---------------------------------------------------------
 # Examples
@@ -182,7 +182,13 @@ with col_right:
     with st.container(border=True):
         st.markdown(f"<div class='section-header'>{nav_selection.upper()} RESULTS</div>", unsafe_allow_html=True)
         
-        if st.session_state.get("run_sim"):
+        if nav_selection == "Documentation":
+            import streamlit.components.v1 as components
+            doc_path = os.path.join(os.path.dirname(__file__), "netlist_documentation.html")
+            with open(doc_path, "r", encoding="utf-8") as f:
+                doc_html = f.read()
+            components.html(doc_html, height=700, scrolling=True)
+        elif st.session_state.get("run_sim"):
             try:
                 # Compile
                 c = parse_netlist(st.session_state["netlist"])

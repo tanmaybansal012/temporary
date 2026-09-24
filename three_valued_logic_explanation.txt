@@ -1,0 +1,39 @@
+# Where Does the 3-Valued Logic (UNKNOWN / 'X') Come Into Play?
+
+You have made an excellent observation. If the State Table generator is explicitly forcing every single wire and flip-flop into a strict `0` or `1` (via the $2^n$ and $2^k$ loops), when would the `UNKNOWN` (X) state ever occur?
+
+The answer is that the simulator operates in **two completely different contexts**, and the `X` state behaves differently in each.
+
+---
+
+### Context 1: During State Table Generation (Truth Tables)
+You are absolutely correct: during truth table generation, **the `X` state almost never appears**. Because we are mathematically forcing the circuit into strict, perfectly defined boolean states ($0$ and $1$), there is no "uninitialized" memory. 
+
+**The Exception: Forbidden States**
+The only time `X` will appear in a state table is if your circuit hits an **invalid or forbidden hardware condition**. 
+For example, the fundamental rule of an SR Latch (Set-Reset Latch) is that you cannot set `S=1` and `R=1` simultaneously. If the $2^n$ combinatorial loop tests the inputs `S=1, R=1`, the simulator intentionally outputs `X` for the next state. 
+
+This tells the engineer reading the table: *"Even though your inputs were perfectly defined 1s, the physical hardware enters an undefined race-condition here."*
+
+---
+
+### Context 2: During Time Simulation (Timing Diagrams)
+This is where the 3-valued logic system is absolutely critical. 
+
+When you run a time-based simulation, you are simulating a physical circuit **powering on**. You are not artificially forcing the internal flip-flops to $0$ or $1$.
+
+**1. Power-On Uninitialized State**
+At Time Step 0 (the moment the circuit powers on), what is the value stored inside a flip-flop? It hasn't received a clock edge yet, so it hasn't captured any data. Is it 0? Is it 1? 
+In real hardware, it is floating or randomly settling. If the simulator just guessed `0`, it might falsely tell you your circuit works perfectly at startup. By enforcing the `X` (UNKNOWN) state at power-on, the simulator forces you to add proper "Reset" logic to your circuit to explicitly initialize it to `0`.
+
+**2. Floating Inputs**
+If a user writes a testbench but forgets to define the value of a specific input pin at a certain time step, that wire is floating. The simulator sets it to `X`.
+
+**3. Safe Propagation (The Math of 'X')**
+The 3-valued logic system ensures that "unknowns" propagate safely through logic gates rather than crashing the simulator or lying to you.
+*   `X AND 0 = 0` (Because if one input is 0, an AND gate is 0 regardless of the other pin).
+*   `X AND 1 = X` (Because the output depends entirely on the unknown pin).
+*   `X OR 1 = 1` 
+
+**Summary:** 
+In combinatorial $2^n$ loops, `X` only exists to warn you about forbidden hardware states (like SR=11). In Time Simulation, `X` exists to accurately model uninitialized memory at power-on and floating wires.

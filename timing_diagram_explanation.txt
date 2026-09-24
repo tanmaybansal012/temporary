@@ -1,0 +1,84 @@
+# Mechanism for Generating Timing Diagrams in the Digital Logic Simulator
+
+This document explains the detailed mechanism of how the logic simulator evaluates combinational and sequential circuits and generates timing diagrams, along with challenges encountered, techniques used, and potential interview questions.
+
+---
+
+## 1. Detailed Mechanism
+
+The generation of a timing diagram is split into two distinct phases: **Simulation** (evaluating the circuit over time) and **Plotting** (rendering the history as a visual waveform).
+
+### A. Simulating the Circuit
+The simulation is driven on a cycle-by-cycle basis. The simulator evaluates the state of every wire in the circuit at each time step based on external inputs.
+
+1.  **Combinational Logic Evaluation**:
+    *   When inputs are applied at a time step, the simulator evaluates the combinational logic.
+    *   Gates are evaluated in a topological order to ensure that all inputs to a gate are known before the gate itself is evaluated.
+    *   This instantly propagates primary inputs through all combinational logic gates to produce intermediate wire values and eventually the inputs to any sequential elements.
+
+2.  **Sequential Logic Evaluation (Two-Phase Protocol)**:
+    Sequential elements (like D, JK, T Flip-Flops and Latches) are tricky because they possess internal state and their outputs feed back into the circuit. The simulator uses a strict two-phase update to prevent race conditions:
+    *   **Phase 1 (Compute)**: Using the inputs that just arrived from the combinational evaluation, each sequential element computes what its *next state* should be based on its *current state* and the clock signal. It looks for rising or falling edges by comparing the current clock input to the previous clock input. 
+    *   **Phase 2 (Commit)**: Only after *all* sequential elements have computed their next state, they simultaneously commit this new state. Their output wires are then updated.
+    
+3.  **State Capture**:
+    At each step, immediately after the combinational logic settles (and before sequential elements commit their next cycle's state), a snapshot of every wire's value is recorded into a `history` list. 
+
+### B. Waveform Generation
+Once the simulation completes, the `history` of states is passed to the waveform generator (in `waveform.py`).
+
+1.  **Signal Mapping**: 
+    The logical states are mapped to numerical values for plotting:
+    *   `HIGH (1)` -> 1.0
+    *   `LOW (0)` -> 0.0
+    *   `UNKNOWN (X)` -> 0.5 (Mid-rail)
+    
+2.  **Drawing the Traces**:
+    *   `matplotlib` is used to plot the traces on a shared X-axis (time).
+    *   The waveform uses a "step-post" drawing style. Instead of drawing a straight diagonal line from one value to the next, it draws a horizontal line for the duration of the time step, and then a vertical line instantly jumping to the next value at the edge. This mimics ideal digital transitions without slew rate.
+    
+3.  **Handling Unknowns**:
+    *   `UNKNOWN` logic states are detected via a mask.
+    *   Instead of just drawing a mid-rail line, the plotter draws an opaque shaded region (orange band) with 'X' markers across the span to clearly signify to the user that the signal is uninitialized or floating.
+
+---
+
+## 2. Problems Encountered & Solved
+
+*   **Problem: Race Conditions in Shift Registers**
+    *   *Issue:* In a shift register (e.g., FF1 -> FF2 -> FF3), if FF1 updates its output before FF2 reads it, FF2 will read the new value in the same cycle instead of the old value.
+    *   *Solution:* The Two-Phase Clock-Tick pattern. By separating "compute" from "commit", all flip-flops sample their inputs simultaneously using the old state of the circuit, mimicking hardware setup/hold times.
+*   **Problem: Initial State Uncertainty**
+    *   *Issue:* At time t=0, the state of memory elements or unconnected wires is fundamentally unknown, which could crash a binary simulator. 
+    *   *Solution:* Implementation of a Three-Valued Logic System (HIGH, LOW, UNKNOWN). The `UNKNOWN` state aggressively propagates through gates (e.g., `X AND 1 = X`) ensuring that simulation doesn't hallucinate a definite state where none exists.
+*   **Problem: Visually Distinguishing Unknown States**
+    *   *Issue:* Simply drawing a line at 0.5 might be confusing as an intermediate analog voltage.
+    *   *Solution:* The plotting logic isolates `UNKNOWN` segments and overlays a transparent shaded bounding box with 'X' characters, matching industry-standard EDA tools like ModelSim or GTKWave.
+
+---
+
+## 3. Techniques Used
+
+*   **Topological Sorting**: Used under the hood to determine the evaluation order of combinational logic gates so that data flows correctly from inputs to outputs without infinite loops.
+*   **Discrete Event / Cycle-based Simulation**: The simulator operates in discrete time steps (cycles) rather than continuous continuous analog time, making it highly efficient for digital logic.
+*   **Matplotlib Step Plots (`ax.step` with `where="post"`)**: A data visualization technique that perfectly maps discrete arrays into standard digital timing diagrams without needing complex custom polygon drawing algorithms.
+
+---
+
+## 4. Potential Interview Questions based on this Architecture
+
+1.  **Architecture & Design**
+    *   *Question:* "How would you design a digital logic simulator to prevent race conditions when updating multiple interconnected flip-flops?"
+    *   *Expected Answer:* Discuss the two-phase commit protocol (evaluate next state for all elements, then commit all at once) to mimic parallel hardware behavior.
+    
+2.  **Data Structures & Algorithms**
+    *   *Question:* "How do you ensure that combinational logic is evaluated in the correct order?"
+    *   *Expected Answer:* By representing the circuit as a Directed Acyclic Graph (DAG) and performing a topological sort.
+
+3.  **Edge Cases & Logic**
+    *   *Question:* "Why is a three-valued logic system (0, 1, X) necessary in a digital simulator, and how would you implement an AND gate for it?"
+    *   *Expected Answer:* It models uninitialized memory and disconnected floating wires. For an AND gate: `0 AND X = 0`, but `1 AND X = X`. 
+
+4.  **Hardware vs. Software Paradigms**
+    *   *Question:* "In a software array, execution is sequential. In hardware, gates evaluate in parallel. How does this simulation bridge that gap?"
+    *   *Expected Answer:* By capturing the state of all wires into a history dictionary *before* applying clock edges, the sequential software mimics simultaneous parallel capture.

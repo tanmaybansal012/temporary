@@ -1,0 +1,248 @@
+# Clock Synchronization and Edge-Triggering in the Digital Logic Simulator
+
+In hardware, an edge-triggered flip-flop relies on physics (specifically, propagation delays and internal feedback loops inside the silicon gates) to only accept data at the exact moment the voltage swings from LOW to HIGH. 
+
+In a software simulation, we don't have continuous physics. Time moves in discrete "chunks" (cycles). To replicate edge-triggering, the software must manually detect transitions between these chunks using a technique called **Historical State Tracking**.
+# Clock Synchronization and Edge-Triggering in the Digital Logic Simulator
+
+In hardware, an edge-triggered flip-flop relies on physics (specifically, propagation delays and internal feedback loops inside the silicon gates) to only accept data at the exact moment the voltage swings from LOW to HIGH. 
+
+In a software simulation, we don't have continuous physics. Time moves in discrete "chunks" (cycles). To replicate edge-triggering, the software must manually detect transitions between these chunks using a technique called **Historical State Tracking**.
+
+### 1. Managing the Edge-Trigger (Historical State Tracking)
+
+If you look inside the flip-flop classes (like `DFlipFlop` in `sequential.py`), every single flip-flop object has a hidden memory variable called `_prev_clk` (previous clock):
+
+```python
+def __init__(self, clock_edge="rising"):
+    self.state = Signal.UNKNOWN       # The actual Q output
+    self._prev_clk = Signal.UNKNOWN   # Memory of what the clock WAS in the last step
+```
+
+When a new cycle begins, the simulator delivers the current inputs (including the current `CLK` value) to the flip-flop. The flip-flop uses a mathematical comparison to detect an edge:
+
+```python
+def _is_triggering_edge(self, clk):
+    # 'clk' is the current clock value just delivered by the simulator
+    if self.clock_edge == "rising":
+        # A rising edge is strictly defined as: Old value was LOW, New value is HIGH
+        return self._prev_clk == Signal.LOW and clk == Signal.HIGH
+```
+By comparing the *past* with the *present*, the flip-flop knows if a voltage swing just occurred.
+
+### 2. How `clock_tick()` Syncs the Flip-Flop
+
+When the simulator calls `clock_tick()` on a flip-flop, the flip-flop executes a strict sequence to ensure data syncs safely:
+
+1. **Phase 1 (Compute):** The flip-flop reads its data inputs (e.g., the `D` pin) and calculates what the new state *should* be. It does **not** overwrite its memory yet.
+2. **Phase 2 (Check Edge):** It checks `_is_triggering_edge()`. 
+3. **Phase 3 (Commit or Ignore):**
+   - If `True` (an edge happened): It commits the computed Phase 1 data into its actual `self.state` (the `Q` output).
+   - If `False` (no edge happened): It ignores the Phase 1 data and holds its old state. This is what makes a flip-flop ignore input data between clock edges!
+4. **Phase 4 (Update History):** Right before finishing, the flip-flop takes the current `CLK` value and saves it into `self._prev_clk`. That way, in the next cycle, today's "present" becomes tomorrow's "past".
+
+### 3. Why we "Trick" it in the State Transition Table
+
+When you simulate a circuit normally over time, the clock naturally goes `0 -> 1 -> 0 -> 1` across different cycles, and the flip-flop naturally detects those edges.
+
+However, when we generate a **State Transition Table**, time isn't actually moving forward. We are in a vacuum, testing thousands of isolated, hypothetical combinations of inputs and states instantly.
+
+Because time isn't moving, the clock isn't naturally oscillating. Therefore, if we just feed `CLK = HIGH` into the flip-flop, it might look at its internal `_prev_clk` and say:
+> *"My previous clock was HIGH. The new clock is HIGH. That's not an edge; that's just a flat line. I'm going to ignore the data."*
+
+To force the flip-flop to accept data so we can record its behavior for the table, the `truth_table.py` generator forcefully injects a synthetic edge right before calling `clock_tick()`:
+
+```python
+# Force the flip-flop's historical memory to LOW
+node.element._prev_clk = Signal.LOW
+
+# Deliver a HIGH clock signal in the current input packet
+elem_inputs["CLK"] = Signal.HIGH
+
+# Now, when we tick the clock, the flip-flop's internal math evaluates:
+# (LOW == LOW) and (HIGH == HIGH) -> TRUE! 
+q_next = node.element.clock_tick(elem_inputs)
+```
+
+By manually splitting the clock logic like this, the software beautifully mimics continuous physical time in a purely mathematical, discrete environment.
+
+### 1. Managing the Edge-Trigger (Historical State Tracking)
+
+If you look inside the flip-flop classes (like `DFlipFlop` in `sequential.py`), every single flip-flop object has a hidden memory variable called `_prev_clk` (previous clock):
+
+```python
+def __init__(self, clock_edge="rising"):
+    self.state = Signal.UNKNOWN       # The actual Q output
+    self._prev_clk = Signal.# Clock Synchronization and Edge-Triggering in the Digital Logic Simulator
+
+In hardware, an edge-triggered flip-flop relies on physics (specifically, propagation delays and internal feedback loops inside the silicon gates) to only accept data at the exact moment the voltage swings from LOW to HIGH. 
+
+In a software simulation, we don't have continuous physics. Time moves in discrete "chunks" (cycles). To replicate edge-triggering, the software must manually detect transitions between these chunks using a technique called **Historical State Tracking**.
+
+### 1. Managing the Edge-Trigger (Historical State Tracking)
+
+If you look inside the flip-flop classes (like `DFlipFlop` in `sequential.py`), every single flip-flop object has a hidden memory variable called `_prev_clk` (previous clock):
+
+```python
+def __init__(self, clock_edge="rising"):
+    self.state = Signal.UNKNOWN       # The actual Q output
+    self._prev_clk = Signal.UNKNOWN   # Memory of what the clock WAS in the last step
+```
+
+When a new cycle begins, the simulator delivers the current inputs (including the current `CLK` value) to the flip-flop. The flip-flop uses a mathematical comparison to detect an edge:
+
+```python
+def _is_triggering_edge(self, clk):
+    # 'clk' is the current clock value just delivered by the simulator
+    if self.clock_edge == "rising":
+        # A rising edge is strictly defined as: Old value was LOW, New value is HIGH
+        return self._prev_clk == Signal.LOW and clk == Signal.HIGH
+```
+By comparing the *past* with the *present*, the flip-flop knows if a voltage swing just occurred.
+
+### 2. How `clock_tick()` Syncs the Flip-Flop
+
+When the simulator calls `clock_tick()` on a flip-flop, the flip-flop executes a strict sequence to ensure data syncs safely:
+
+1. **Phase 1 (Compute):** The flip-flop reads its data inputs (e.g., the `D` pin) and calculates what the new state *should* be. It does **not** overwrite its memory yet.
+2. **Phase 2 (Check Edge):** It checks `_is_triggering_edge()`. 
+3. **Phase 3 (Commit or Ignore):**
+   - If `True` (an edge happened): It commits the computed Phase 1 data into its actual `self.state` (the `Q` output).
+   - If `False` (no edge happened): It ignores the Phase 1 data and holds its old state. This is what makes a flip-flop ignore input data between clock edges!
+4. **Phase 4 (Update History):** Right before finishing, the flip-flop takes the current `CLK` value and saves it into `self._prev_clk`. That way, in the next cycle, today's "present" becomes tomorrow's "past".
+
+### 3. Why we "Trick" it in the State Transition Table
+
+When you simulate a circuit normally over time, the clock naturally goes `0 -> 1 -> 0 -> 1` across different cycles, and the flip-flop naturally detects those edges.
+
+However, when we generate a **State Transition Table**, time isn't actually moving forward. We are in a vacuum, testing thousands of isolated, hypothetical combinations of inputs and states instantly.
+
+Because time isn't moving, the clock isn't naturally oscillating. Therefore, if we just feed `CLK = HIGH` into the flip-flop, it might look at its internal `_prev_clk` and say:
+> *"My previous clock was HIGH. The new clock is HIGH. That's not an edge; that's just a flat line. I'm going to ignore the data."*
+
+To force the flip-flop to accept data so we can record its behavior for the table, the `truth_table.py` generator forcefully injects a synthetic edge right before calling `clock_tick()`:
+
+```python
+# Force the flip-flop's historical memory to LOW
+node.element._prev_clk = Signal.LOW
+
+# Deliver a HIGH clock signal in the current input packet
+elem_inputs["CLK"] = Signal.HIGH
+
+# Now, when we tick the clock, the flip-flop's internal math evaluates:
+# (LOW == LOW) and (HIGH == HIGH) -> TRUE! 
+q_next = node.element.clock_tick(elem_inputs)
+```
+
+By manually splitting the clock logic like this, the software beautifully mimics continuous physical time in a purely mathematical, discrete environment.
+UNKNOWN   # Memory of what the clock WAS in the last step
+```
+
+When a new cycle begins, the simulator delivers the current inputs (including the current `CLK` value) to the flip-flop. The flip-flop uses a mathematical comparison to detect an edge:
+# Clock Synchronization and Edge-Triggering in the Digital Logic Simulator
+
+In hardware, an edge-triggered flip-flop relies on physics (specifically, propagation delays and internal feedback loops inside the silicon gates) to only accept data at the exact moment the voltage swings from LOW to HIGH. 
+
+In a software simulation, we don't have continuous physics. Time moves in discrete "chunks" (cycles). To replicate edge-triggering, the software must manually detect transitions between these chunks using a technique called **Historical State Tracking**.
+
+### 1. Managing the Edge-Trigger (Historical State Tracking)
+
+If you look inside the flip-flop classes (like `DFlipFlop` in `sequential.py`), every single flip-flop object has a hidden memory variable called `_prev_clk` (previous clock):
+
+```python
+def __init__(self, clock_edge="rising"):
+    self.state = Signal.UNKNOWN       # The actual Q output
+    self._prev_clk = Signal.UNKNOWN   # Memory of what the clock WAS in the last step
+```
+
+When a new cycle begins, the simulator delivers the current inputs (including the current `CLK` value) to the flip-flop. The flip-flop uses a mathematical comparison to detect an edge:
+
+```python
+def _is_triggering_edge(self, clk):
+    # 'clk' is the current clock value just delivered by the simulator
+    if self.clock_edge == "rising":
+        # A rising edge is strictly defined as: Old value was LOW, New value is HIGH
+        return self._prev_clk == Signal.LOW and clk == Signal.HIGH
+```
+By comparing the *past* with the *present*, the flip-flop knows if a voltage swing just occurred.
+
+### 2. How `clock_tick()` Syncs the Flip-Flop
+
+When the simulator calls `clock_tick()` on a flip-flop, the flip-flop executes a strict sequence to ensure data syncs safely:
+
+1. **Phase 1 (Compute):** The flip-flop reads its data inputs (e.g., the `D` pin) and calculates what the new state *should* be. It does **not** overwrite its memory yet.
+2. **Phase 2 (Check Edge):** It checks `_is_triggering_edge()`. 
+3. **Phase 3 (Commit or Ignore):**
+   - If `True` (an edge happened): It commits the computed Phase 1 data into its actual `self.state` (the `Q` output).
+   - If `False` (no edge happened): It ignores the Phase 1 data and holds its old state. This is what makes a flip-flop ignore input data between clock edges!
+4. **Phase 4 (Update History):** Right before finishing, the flip-flop takes the current `CLK` value and saves it into `self._prev_clk`. That way, in the next cycle, today's "present" becomes tomorrow's "past".
+
+### 3. Why we "Trick" it in the State Transition Table
+
+When you simulate a circuit normally over time, the clock naturally goes `0 -> 1 -> 0 -> 1` across different cycles, and the flip-flop naturally detects those edges.
+
+However, when we generate a **State Transition Table**, time isn't actually moving forward. We are in a vacuum, testing thousands of isolated, hypothetical combinations of inputs and states instantly.
+
+Because time isn't moving, the clock isn't naturally oscillating. Therefore, if we just feed `CLK = HIGH` into the flip-flop, it might look at its internal `_prev_clk` and say:
+> *"My previous clock was HIGH. The new clock is HIGH. That's not an edge; that's just a flat line. I'm going to ignore the data."*
+
+To force the flip-flop to accept data so we can record its behavior for the table, the `truth_table.py` generator forcefully injects a synthetic edge right before calling `clock_tick()`:
+
+```python
+# Force the flip-flop's historical memory to LOW
+node.element._prev_clk = Signal.LOW
+
+# Deliver a HIGH clock signal in the current input packet
+elem_inputs["CLK"] = Signal.HIGH
+
+# Now, when we tick the clock, the flip-flop's internal math evaluates:
+# (LOW == LOW) and (HIGH == HIGH) -> TRUE! 
+q_next = node.element.clock_tick(elem_inputs)
+```
+
+By manually splitting the clock logic like this, the software beautifully mimics continuous physical time in a purely mathematical, discrete environment.
+
+```python
+def _is_triggering_edge(self, clk):
+    # 'clk' is the current clock value just delivered by the simulator
+    if self.clock_edge == "rising":
+        # A rising edge is strictly defined as: Old value was LOW, New value is HIGH
+        return self._prev_clk == Signal.LOW and clk == Signal.HIGH
+```
+By comparing the *past* with the *present*, the flip-flop knows if a voltage swing just occurred.
+
+### 2. How `clock_tick()` Syncs the Flip-Flop
+
+When the simulator calls `clock_tick()` on a flip-flop, the flip-flop executes a strict sequence to ensure data syncs safely:
+
+1. **Phase 1 (Compute):** The flip-flop reads its data inputs (e.g., the `D` pin) and calculates what the new state *should* be. It does **not** overwrite its memory yet.
+2. **Phase 2 (Check Edge):** It checks `_is_triggering_edge()`. 
+3. **Phase 3 (Commit or Ignore):**
+   - If `True` (an edge happened): It commits the computed Phase 1 data into its actual `self.state` (the `Q` output).
+   - If `False` (no edge happened): It ignores the Phase 1 data and holds its old state. This is what makes a flip-flop ignore input data between clock edges!
+4. **Phase 4 (Update History):** Right before finishing, the flip-flop takes the current `CLK` value and saves it into `self._prev_clk`. That way, in the next cycle, today's "present" becomes tomorrow's "past".
+
+### 3. Why we "Trick" it in the State Transition Table
+
+When you simulate a circuit normally over time, the clock naturally goes `0 -> 1 -> 0 -> 1` across different cycles, and the flip-flop naturally detects those edges.
+
+However, when we generate a **State Transition Table**, time isn't actually moving forward. We are in a vacuum, testing thousands of isolated, hypothetical combinations of inputs and states instantly.
+
+Because time isn't moving, the clock isn't naturally oscillating. Therefore, if we just feed `CLK = HIGH` into the flip-flop, it might look at its internal `_prev_clk` and say:
+> *"My previous clock was HIGH. The new clock is HIGH. That's not an edge; that's just a flat line. I'm going to ignore the data."*
+
+To force the flip-flop to accept data so we can record its behavior for the table, the `truth_table.py` generator forcefully injects a synthetic edge right before calling `clock_tick()`:
+
+```python
+# Force the flip-flop's historical memory to LOW
+node.element._prev_clk = Signal.LOW
+
+# Deliver a HIGH clock signal in the current input packet
+elem_inputs["CLK"] = Signal.HIGH
+
+# Now, when we tick the clock, the flip-flop's internal math evaluates:
+# (LOW == LOW) and (HIGH == HIGH) -> TRUE! 
+q_next = node.element.clock_tick(elem_inputs)
+```
+
+By manually splitting the clock logic like this, the software beautifully mimics continuous physical time in a purely mathematical, discrete environment.
